@@ -21,6 +21,8 @@
  */
 #define __PROG_TYPES_COMPAT__ //Needed to get SerialPort.h to work in Arduino 1.6.x
 
+#include <Arduino.h>
+
 #include <SPI.h>
 #include <SdFat.h> //We do not use the built-in SD.h file because it calls Serial.print
 #include <SerialPort.h> //This is a new/beta library written by Bill Greiman. You rock Bill!
@@ -100,6 +102,23 @@ byte setting_max_escape_character; //Number of escape chars before break logging
 byte setting_verbose; //This controls the whether we get extended or simple responses.
 byte setting_echo; //This turns on/off echoing at the command prompt
 byte setting_ignore_RX; //This flag, when set to 1 will make OpenLog ignore the state of the RX pin when powering up
+
+//Forward declarations
+void systemError(byte error_type);
+char* newlog(void);
+void seqlog(void);
+byte append_file(char* file_name);
+void blink_error(byte ERROR_TYPE);
+void check_emergency_reset(void);
+void set_default_settings(void);
+void read_system_settings(void);
+void read_config_file(void);
+void record_config_file(void);
+void writeBaud(long uartRate);
+long readBaud(void);
+uint32_t strtolong(const char* str);
+void toggleLED(byte pinNumber);
+
 
 //Handle errors by printing the error type and blinking LEDs in certain way
 //The function will never exit - it loops forever inside blink_error
@@ -849,4 +868,3 @@ void toggleLED(byte pinNumber)
   if (digitalRead(pinNumber)) digitalWrite(pinNumber, LOW);
   else digitalWrite(pinNumber, HIGH);
 }
-
