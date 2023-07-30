@@ -1,0 +1,6 @@
+[submodule "Libraries/SdFat"]
+	path = Libraries/SdFat
+	url = https://github.com/greiman/SdFat-beta.git
+[submodule "Libraries/SerialPort"]
+	path = Libraries/SerialPort
+	url = https://github.com/greiman/SerialPort.git
