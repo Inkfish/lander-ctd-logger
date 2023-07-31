@@ -29,6 +29,8 @@
 #include <EEPROM.h>
 #include <FreeStack.h> //Allows us to print the available stack/RAM size
 
+#include "CTD.h"
+
 SerialPort<0, 512, 0> NewSerial;
 //This is a very important buffer declaration. This sets the <port #, rx size, tx size>. We set
 //the TX buffer to zero because we will be spending most of our time needing to buffer the incoming (RX) characters.
@@ -88,6 +90,7 @@ SdFat sd;
 long setting_uart_speed; //This is the baud rate that the system runs at
 
 //Forward declarations
+void serial_out(const char* str);
 void systemError(byte error_type);
 char* newlog(void);
 byte append_file(char* file_name);
@@ -97,6 +100,12 @@ void read_config_file(void);
 void record_config_file(void);
 void writeBaud(long uartRate);
 long readBaud(void);
+
+
+//Wrapper around NewSerial::write() that can be passed to the CTD handler.
+void serial_out(const char* str) {
+  NewSerial.write(str);
+}
 
 
 //Handle errors by printing the error type and blinking LEDs in certain way
@@ -310,6 +319,9 @@ byte append_file(char* file_name)
     if (charsToRecord > 0) {
       //Scan the local buffer for esacape characters
       //In the light version of OpenLog, we don't check for escape characters
+
+      //Modification for Inkfish CTD logger
+      handle_ctd_input(serial_out, localBuffer, charsToRecord);
 
       workingFile.write(localBuffer, charsToRecord); //Record the buffer to the card
 
