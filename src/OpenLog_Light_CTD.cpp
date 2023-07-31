@@ -124,23 +124,23 @@ void toggleLED(byte pinNumber);
 //The function will never exit - it loops forever inside blink_error
 void systemError(byte error_type)
 {
-  NewSerial.print(F("Error "));
+  //NewSerial.print(F("Error "));
   switch(error_type)
   {
   case ERROR_CARD_INIT:
-    NewSerial.print(F("card.init")); 
+    //NewSerial.print(F("card.init")); 
     blink_error(ERROR_SD_INIT);
     break;
   case ERROR_VOLUME_INIT:
-    NewSerial.print(F("volume.init")); 
+    //NewSerial.print(F("volume.init")); 
     blink_error(ERROR_SD_INIT);
     break;
   case ERROR_ROOT_INIT:
-    NewSerial.print(F("root.init")); 
+    //NewSerial.print(F("root.init")); 
     blink_error(ERROR_SD_INIT);
     break;
   case ERROR_FILE_OPEN:
-    NewSerial.print(F("file.open")); 
+    //NewSerial.print(F("file.open")); 
     blink_error(ERROR_SD_INIT);
     break;
   }
@@ -177,13 +177,13 @@ void setup(void)
     UBRR0 = (F_CPU / (16UL * setting_uart_speed)) - 1;
     UCSR0A &= ~_BV(U2X0);
   }
-  NewSerial.print(F("1"));
+  //NewSerial.print(F("1"));
 
   //Setup SD & FAT
   if (!sd.begin(SD_CHIP_SELECT, SPI_FULL_SPEED)) systemError(ERROR_CARD_INIT);
   if (!sd.chdir()) systemError(ERROR_ROOT_INIT); //Change to root directory. All new file creation will be in root.
 
-  NewSerial.print(F("2"));
+  //NewSerial.print(F("2"));
 
   //Search for a config file and load any settings found. This will over-ride previous EEPROM settings if found.
   read_config_file();
@@ -242,7 +242,7 @@ char* newlog(void)
   if(new_file_number == 65534)
   {
     //Gracefully drop out to command prompt with some error
-    NewSerial.print(F("!Too many logs:1!"));
+    //NewSerial.print(F("!Too many logs:1!"));
     return(0); //Bail!
   }
 
@@ -273,7 +273,7 @@ char* newlog(void)
     new_file_number++;
     if(new_file_number > 65533) //There is a max of 65534 logs
     {
-      NewSerial.print(F("!Too many logs:2!"));
+      //NewSerial.print(F("!Too many logs:2!"));
       return(0); //Bail!
     }
   }
@@ -291,8 +291,8 @@ char* newlog(void)
     EEPROM.write(LOCATION_FILE_NUMBER_MSB, msb); // MSB
 
 #if DEBUG
-  NewSerial.print(F("\nCreated new file: "));
-  NewSerial.println(new_file_name);
+  //NewSerial.print(F("\nCreated new file: "));
+  //NewSerial.println(new_file_name);
 #endif
 
   //  append_file(new_file_name);
@@ -315,7 +315,7 @@ void seqlog(void)
   //Try to create sequential file
   if (!seqFile.open(sequentialFileName, O_CREAT | O_WRITE))
   {
-    NewSerial.print(F("Error creating SEQLOG\n"));
+    //NewSerial.print(F("Error creating SEQLOG\n"));
     return;
   }
 
@@ -355,11 +355,11 @@ byte append_file(char* file_name)
   unsigned long lastSyncTime = millis(); //Keeps track of the last time the file was synced
 
 #if DEBUG
-  NewSerial.print(F("FreeStack: "));
-  NewSerial.println(FreeStack());
+  //NewSerial.print(F("FreeStack: "));
+  //NewSerial.println(FreeStack());
 #endif
 
-  NewSerial.print(F("<")); //give a different prompt to indicate no echoing
+  //NewSerial.print(F("<")); //give a different prompt to indicate no echoing
   digitalWrite(statled1, HIGH); //Turn on indicator LED
 
   //Start recording incoming characters
@@ -577,7 +577,7 @@ void read_config_file(void)
   if (!configFile.open(configFileName, O_READ)) {
     //If we don't have a config file already, then create config file and record the current system settings to the file
 #if DEBUG
-    NewSerial.println(F("No config found - creating default:"));
+    //NewSerial.println(F("No config found - creating default:"));
 #endif
     configFile.close();
 
@@ -588,7 +588,7 @@ void read_config_file(void)
 
   //If we found the config file then load settings from file and push them into EEPROM
 #if DEBUG
-  NewSerial.println(F("Found config file!"));
+  //NewSerial.println(F("Found config file!"));
 #endif
 
   //Read up to 20 characters from the file. There may be a better way of doing this...
@@ -604,12 +604,12 @@ void read_config_file(void)
 
 #if DEBUG
   //Print line for debugging
-  NewSerial.print(F("Text Settings: "));
-  for(int i = 0; i < len; i++)
-    NewSerial.write(settings_string[i]);
-  NewSerial.println();
-  NewSerial.print(F("Len: "));
-  NewSerial.println(len);
+  //NewSerial.print(F("Text Settings: "));
+  //for(int i = 0; i < len; i++)
+    //NewSerial.write(settings_string[i]);
+  //NewSerial.println();
+  //NewSerial.print(F("Len: "));
+  //NewSerial.println(len);
 #endif
 
   //Default the system settings in case things go horribly wrong
@@ -750,7 +750,7 @@ void read_config_file(void)
     record_config_file(); //If we corrected some values because the config file was corrupt, then overwrite any corruption
 #if DEBUG
   else
-    NewSerial.println(F("Config file matches system settings"));
+    {} //NewSerial.println(F("Config file matches system settings"));
 #endif
 
   //All done! New settings are loaded. System will now operate off new config settings found in file.
@@ -783,7 +783,7 @@ void record_config_file(void)
   //If there is currently a config file, trash it
   if (myFile.open(configFileName, O_WRITE)) {
     if (!myFile.remove()){
-      NewSerial.println(F("Remove config failed"));
+      //NewSerial.println(F("Remove config failed"));
       myFile.close(); //Close this file
       return;
     }
@@ -812,7 +812,7 @@ void record_config_file(void)
 
   //Record current system settings to the config file
   if(myFile.write(settings_string, strlen(settings_string)) != strlen(settings_string))
-    NewSerial.println(F("error writing to file"));
+    {} //NewSerial.println(F("error writing to file"));
 
   myFile.println(); //Add a break between lines
 
