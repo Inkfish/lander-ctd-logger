@@ -10457,6 +10457,24 @@
        id="path4430" />
   </g>
   <g
+     partID="855182150"
+     id="g4444">
+    <path
+       stroke-width="3.2"
+       stroke="#1b5bb3"
+       stroke-linecap="round"
+       fill="none"
+       d="m 173.556,86.4032 c 5.392,10.8348 21.599,-21.6 21.599,-21.6"
+       id="path4440" />
+    <path
+       stroke-width="1.6"
+       stroke="#418dd9"
+       stroke-linecap="round"
+       fill="none"
+       d="m 173.556,86.4032 c 5.392,10.8348 21.599,-21.6 21.599,-21.6"
+       id="path4442" />
+  </g>
+  <g
      partID="855182030"
      id="g4438">
     <path
@@ -10475,24 +10493,6 @@
        id="path4436" />
   </g>
   <g
-     partID="855182150"
-     id="g4444">
-    <path
-       stroke-width="3.2"
-       stroke="#1b5bb3"
-       stroke-linecap="round"
-       fill="none"
-       d="M173.556,86.4032C178.948,97.238, 195.155,64.8032 195.155,64.8032"
-       id="path4440" />
-    <path
-       stroke-width="1.6"
-       stroke="#418dd9"
-       stroke-linecap="round"
-       fill="none"
-       d="M173.556,86.4032C178.948,97.238, 195.155,64.8032 195.155,64.8032"
-       id="path4442" />
-  </g>
-  <g
      partID="855182420"
      id="g4450">
     <path
@@ -10500,14 +10500,14 @@
        stroke="#ad6a38"
        stroke-linecap="round"
        fill="none"
-       d="M245.555,86.4C200.622,111.434, 137.555,36.0035 137.557,57.6035"
+       d="m 245.555,86.4 c -44.933,25.034 -108,-50.3965 -107.998,-28.7965"
        id="path4446" />
     <path
        stroke-width="1.6"
        stroke="#ef6100"
        stroke-linecap="round"
        fill="none"
-       d="M245.555,86.4C200.622,111.434, 137.555,36.0035 137.557,57.6035"
+       d="m 245.555,86.4 c -44.933,25.034 -108,-50.3965 -107.998,-28.7965"
        id="path4448" />
   </g>
   <g
