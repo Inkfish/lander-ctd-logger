@@ -155,27 +155,35 @@ static void handle_ctd_line(writefn_t writefn) {
 #endif
 
         // Output the average
-        snprintf(
-            line,
-            sizeof(line),
-            "%8.4f, %8.5f, %8.3f"
+        buf_ptr = line;
+        dtostrf(samples[0].temperature, 8, 4, buf_ptr);
+        buf_ptr += 8;
+        *buf_ptr++ = ',';
+        *buf_ptr++ = ' ';
+        dtostrf(samples[0].conductivity, 8, 5, buf_ptr);
+        buf_ptr += 8;
+        *buf_ptr++ = ',';
+        *buf_ptr++ = ' ';
+        dtostrf(samples[0].pressure, 8, 3, buf_ptr);
+        buf_ptr += 8;
+
 #if OUTPUT_SAL
-            ", %8.4f"
+        *buf_ptr++ = ',';
+        *buf_ptr++ = ' ';
+        dtostrf(samples[0].salinity, 8, 4, buf_ptr);
+        buf_ptr += 8;
 #endif
+
 #if OUTPUT_SV
-            ", %8.3f"
+        *buf_ptr++ = ',';
+        *buf_ptr++ = ' ';
+        dtostrf(samples[0].sound_velocity, 8, 3, buf_ptr);
+        buf_ptr += 8;
 #endif
-            "\n",
-            samples[0].temperature,
-            samples[0].conductivity,
-            samples[0].pressure
-#if OUTPUT_SAL
-            , samples[0].salinity
-#endif
-#if OUTPUT_SV
-            , samples[0].sound_velocity
-#endif
-        );
+
+        *buf_ptr++ = '\n';
+        *buf_ptr++ = '\0';
+
         writefn(line);
 
         // Reset the insertion cursor
