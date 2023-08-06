@@ -49,30 +49,19 @@ SerialPort<0, 850, 0> NewSerial;
 
 #define CFG_FILENAME "config.txt" //This is the name of the file that contains the unit settings
 
-#define MAX_CFG "115200,103,214,0,1,1,0\0" //= 115200 bps, escape char of ASCII(103), 214 times, new log mode, verbose on, echo on, ignore RX false. 
+#define MAX_CFG "115200\0" //= 115200 bps
 #define CFG_LENGTH (strlen(MAX_CFG) + 1) //Length of text found in config file. strlen ignores \0 so we have to add it back 
-#define SEQ_FILENAME "SEQLOG00.TXT" //This is the name for the file when you're in sequential modeu
 
 //Internal EEPROM locations for the user settings
 #define LOCATION_BAUD_SETTING		0x01
-#define LOCATION_SYSTEM_SETTING		0x02
 #define LOCATION_FILE_NUMBER_LSB	0x03
 #define LOCATION_FILE_NUMBER_MSB	0x04
-#define LOCATION_ESCAPE_CHAR		0x05
-#define LOCATION_MAX_ESCAPE_CHAR	0x06
-#define LOCATION_VERBOSE                0x07
-#define LOCATION_ECHO                   0x08
 #define LOCATION_BAUD_SETTING_HIGH	0x09
 #define LOCATION_BAUD_SETTING_MID	0x0A
 #define LOCATION_BAUD_SETTING_LOW	0x0B
-#define LOCATION_IGNORE_RX		0x0C
 
 #define BAUD_MIN  300
 #define BAUD_MAX  1000000
-
-#define MODE_NEWLOG	0
-#define MODE_SEQLOG     1
-#define MODE_COMMAND    2
 
 //STAT1 is a general LED and indicates serial traffic
 #define STAT1  5 //On PORTD
@@ -96,21 +85,12 @@ const byte statled2 = 13; //This is the SPI LED, indicating SD traffic
 SdFat sd;
 
 long setting_uart_speed; //This is the baud rate that the system runs at, default is 9600. Can be 300 to 1,000,000
-byte setting_system_mode; //This is the mode the system runs in, default is MODE_NEWLOG
-byte setting_escape_character; //This is the ASCII character we look for to break logging, default is ctrl+z
-byte setting_max_escape_character; //Number of escape chars before break logging, default is 3
-byte setting_verbose; //This controls the whether we get extended or simple responses.
-byte setting_echo; //This turns on/off echoing at the command prompt
-byte setting_ignore_RX; //This flag, when set to 1 will make OpenLog ignore the state of the RX pin when powering up
 
 //Forward declarations
 void systemError(byte error_type);
 char* newlog(void);
-void seqlog(void);
 byte append_file(char* file_name);
 void blink_error(byte ERROR_TYPE);
-void check_emergency_reset(void);
-void set_default_settings(void);
 void read_system_settings(void);
 void read_config_file(void);
 void record_config_file(void);
@@ -187,24 +167,11 @@ void setup(void)
 
   //Search for a config file and load any settings found. This will over-ride previous EEPROM settings if found.
   read_config_file();
-
-  if(setting_ignore_RX == OFF) //If we are NOT ignoring RX, then
-    check_emergency_reset(); //Look to see if the RX pin is being pulled low
 }
 
 void loop(void)
 {
-  //If we are in new log mode, find a new file name to write to
-  if(setting_system_mode == MODE_NEWLOG)
-  {
-    //new_file_name = newlog();
-    append_file(newlog()); //Append the file name that newlog() returns
-  }
-
-  //If we are in sequential log mode, determine if seqlog.txt has been created or not, and then open it for logging
-  if(setting_system_mode == MODE_SEQLOG)
-    seqlog();
-
+  append_file(newlog()); //Append the file name that newlog() returns
   while(1); //We should never get this far
 }
 
@@ -299,36 +266,10 @@ char* newlog(void)
   return(new_file_name);
 }
 
-//Log to the same file every time the system boots, sequentially
-//Checks to see if the file SEQLOG.txt is available
-//If not, create it
-//If yes, append to it
-//Return 0 on error
-//Return anything else on sucess
-void seqlog(void)
-{
-  SdFile seqFile;
-
-  char sequentialFileName[strlen(SEQ_FILENAME)]; //Limited to 8.3
-  strcpy_P(sequentialFileName, PSTR(SEQ_FILENAME)); //This is the name of the config file. 'config.sys' is probably a bad idea.
-
-  //Try to create sequential file
-  if (!seqFile.open(sequentialFileName, O_CREAT | O_WRITE))
-  {
-    //NewSerial.print(F("Error creating SEQLOG\n"));
-    return;
-  }
-
-  seqFile.close(); //Close this new file we just opened
-
-  append_file(sequentialFileName); 
-}
-
 //This is the most important function of the device. These loops have been tweaked as much as possible.
 //Modifying this loop may negatively affect how well the device can record at high baud rates.
 //Appends a stream of serial data to a given file
 //Assumes the currentDirectory variable has been set before entering the routine
-//Does not exit until Ctrl+z (ASCII 26) is received
 //Returns 0 on error
 //Returns 1 on success
 byte append_file(char* file_name)
@@ -411,90 +352,6 @@ void blink_error(byte ERROR_TYPE) {
   }
 }
 
-//Check to see if we need an emergency UART reset
-//Scan the RX pin for 2 seconds
-//If it's low the entire time, then return 1
-void check_emergency_reset(void)
-{
-  pinMode(0, INPUT); //Turn the RX pin into an input
-  digitalWrite(0, HIGH); //Push a 1 onto RX pin to enable internal pull-up
-
-  //Quick pin check
-  if(digitalRead(0) == HIGH) return;
-
-  //Disable SPI so that we control the LEDs
-  SPI.end();
-
-  //Wait 2 seconds, blinking LEDs while we wait
-  pinMode(statled2, OUTPUT);
-  digitalWrite(statled2, HIGH); //Set the STAT2 LED
-  for(byte i = 0 ; i < 40 ; i++)
-  {
-    delay(25);
-    toggleLED(statled1); //Blink the stat LEDs
-
-    if(digitalRead(0) == HIGH) return; //Check to see if RX is not low anymore
-
-    delay(25);
-    toggleLED(statled2); //Blink the stat LEDs
-
-    if(digitalRead(0) == HIGH) return; //Check to see if RX is not low anymore
-  }		
-
-  //If we make it here, then RX pin stayed low the whole time
-  set_default_settings(); //Reset baud, escape characters, escape number, system mode
-
-  //Try to setup the SD card so we can record these new settings
-  if (!sd.begin(SD_CHIP_SELECT, SPI_HALF_SPEED)) systemError(ERROR_CARD_INIT);
-  if (!sd.chdir()) systemError(ERROR_ROOT_INIT); //Change to root directory
-
-  record_config_file(); //Record new config settings
-
-  //Disable SPI so that we control the LEDs
-  SPI.end();
-
-  pinMode(statled1, OUTPUT);
-  pinMode(statled2, OUTPUT);
-  digitalWrite(statled1, HIGH);
-  digitalWrite(statled2, HIGH);
-
-  //Now sit in forever loop indicating system is now at 9600bps
-  while(1)
-  {
-    delay(500);
-    toggleLED(statled1); //Blink the stat LEDs
-    toggleLED(statled2); //Blink the stat LEDs
-  }
-}
-
-//Resets all the system settings to safe values
-void set_default_settings(void)
-{
-  //Reset UART to 9600bps
-  writeBaud(9600);
-
-  //Reset system to new log mode
-  EEPROM.write(LOCATION_SYSTEM_SETTING, MODE_NEWLOG);
-
-  //Reset escape character to ctrl+z
-  EEPROM.write(LOCATION_ESCAPE_CHAR, 26); 
-
-  //Reset number of escape characters to 3
-  EEPROM.write(LOCATION_MAX_ESCAPE_CHAR, 3);
-
-  //Reset verbose responses to on
-  EEPROM.write(LOCATION_VERBOSE, ON);
-
-  //Reset echo to on
-  EEPROM.write(LOCATION_ECHO, ON);
-
-  //Reset the ignore RX to 'Pay attention to RX!'
-  EEPROM.write(LOCATION_IGNORE_RX, OFF);
-
-  //These settings are not recorded to the config file
-  //We can't do it here because we are not sure the FAT system is init'd
-}
-
 //Reads the current system settings from EEPROM
 //If anything looks weird, reset setting to default value
 void read_system_settings(void)
@@ -506,61 +363,6 @@ void read_system_settings(void)
   {
     setting_uart_speed = 9600; //Reset UART to 9600 if there is no speed stored
     writeBaud(setting_uart_speed); //Record to EEPROM
-  }
-
-  //Determine the system mode we should be in
-  //Default is NEWLOG mode
-  setting_system_mode = EEPROM.read(LOCATION_SYSTEM_SETTING);
-  if(setting_system_mode > 5) 
-  {
-    setting_system_mode = MODE_NEWLOG; //By default, unit will turn on and go to new file logging
-    EEPROM.write(LOCATION_SYSTEM_SETTING, setting_system_mode);
-  }
-
-  //Read the escape_character
-  //ASCII(26) is ctrl+z
-  setting_escape_character = EEPROM.read(LOCATION_ESCAPE_CHAR);
-  if(setting_escape_character == 0 || setting_escape_character == 255) 
-  {
-    setting_escape_character = 26; //Reset escape character to ctrl+z
-    EEPROM.write(LOCATION_ESCAPE_CHAR, setting_escape_character);
-  }
-
-  //Read the number of escape_characters to look for
-  //Default is 3
-  setting_max_escape_character = EEPROM.read(LOCATION_MAX_ESCAPE_CHAR);
-  if(setting_max_escape_character == 255) 
-  {
-    setting_max_escape_character = 3; //Reset number of escape characters to 3
-    EEPROM.write(LOCATION_MAX_ESCAPE_CHAR, setting_max_escape_character);
-  }
-
-  //Read whether we should use verbose responses or not
-  //Default is true
-  setting_verbose = EEPROM.read(LOCATION_VERBOSE);
-  if(setting_verbose != ON && setting_verbose != OFF) 
-  {
-    setting_verbose = ON; //Reset verbose to true
-    EEPROM.write(LOCATION_VERBOSE, setting_verbose);
-  }
-
-  //Read whether we should echo characters or not
-  //Default is true
-  setting_echo = EEPROM.read(LOCATION_ECHO);
-  if(setting_echo != ON || setting_echo != OFF) 
-  {
-    setting_echo = ON; //Reset to echo on
-    EEPROM.write(LOCATION_ECHO, setting_echo);
-  }
-
-  //Read whether we should ignore RX at power up
-  //Some users need OpenLog to ignore the RX pin during power up
-  //Default is false or ignore
-  setting_ignore_RX = EEPROM.read(LOCATION_IGNORE_RX);
-  if(setting_ignore_RX > 1) 
-  {
-    setting_ignore_RX = OFF; //By default we DO NOT ignore RX
-    EEPROM.write(LOCATION_IGNORE_RX, setting_ignore_RX);
   }
 }
 
@@ -594,7 +396,7 @@ void read_config_file(void)
   //Read up to 20 characters from the file. There may be a better way of doing this...
   char c;
   int len;
-  byte settings_string[CFG_LENGTH]; //"115200,103,14,0,1,1\0" = 115200 bps, escape char of ASCII(103), 14 times, new log mode, verbose on, echo on.
+  byte settings_string[CFG_LENGTH];
   for(len = 0 ; len < CFG_LENGTH ; len++) {
     if( (c = configFile.read()) < 0) break; //We've reached the end of the file
     if(c == '\0') break; //Bail if we hit the end of this string
@@ -614,12 +416,6 @@ void read_config_file(void)
 
   //Default the system settings in case things go horribly wrong
   long new_system_baud = 9600;
-  byte new_system_mode = MODE_NEWLOG;
-  byte new_system_escape = 26;
-  byte new_system_max_escape = 3;
-  byte new_system_verbose = ON;
-  byte new_system_echo = ON;
-  byte new_system_ignore_RX = OFF;  
 
   //Parse the settings out
   byte i = 0, j = 0, setting_number = 0;
@@ -646,36 +442,6 @@ void read_config_file(void)
       //Basic error checking
       if(new_system_baud < BAUD_MIN || new_system_baud > BAUD_MAX) new_system_baud = 9600; //Default to 9600
     }
-    else if(setting_number == 1) //Escape character
-    {
-      new_system_escape = new_setting_int;
-      if(new_system_escape == 0 || new_system_escape > 127) new_system_escape = 26; //Default is ctrl+z
-    }
-    else if(setting_number == 2) //Max amount escape character
-    {
-      new_system_max_escape = new_setting_int;
-      if(new_system_max_escape > 254) new_system_max_escape = 3; //Default is 3
-    }
-    else if(setting_number == 3) //System mode
-    {
-      new_system_mode = new_setting_int;
-      if(new_system_mode == 0 || new_system_mode > MODE_COMMAND) new_system_mode = MODE_NEWLOG; //Default is NEWLOG
-    }
-    else if(setting_number == 4) //Verbose setting
-    {
-      new_system_verbose = new_setting_int;
-      if(new_system_verbose != ON && new_system_verbose != OFF) new_system_verbose = ON; //Default is on
-    }
-    else if(setting_number == 5) //Echo setting
-    {
-      new_system_echo = new_setting_int;
-      if(new_system_echo != ON && new_system_echo != OFF) new_system_echo = ON; //Default is on
-    }
-    else if(setting_number == 6) //Ignore RX setting
-    {
-      new_system_ignore_RX = new_setting_int;
-      if(new_system_ignore_RX != ON && new_system_ignore_RX != OFF) new_system_ignore_RX = OFF; //Default is to listen to RX
-    }
     else
       //We're done! Stop looking for settings
       break;
@@ -697,54 +463,6 @@ void read_config_file(void)
     recordNewSettings = true;
   }
 
-  if(new_system_mode != setting_system_mode) {
-    //Goto new system mode
-    setting_system_mode = new_system_mode;
-    EEPROM.write(LOCATION_SYSTEM_SETTING, setting_system_mode);
-
-    recordNewSettings = true;
-  }
-
-  if(new_system_escape != setting_escape_character) {
-    //Goto new system escape char
-    setting_escape_character = new_system_escape;
-    EEPROM.write(LOCATION_ESCAPE_CHAR, setting_escape_character); 
-
-    recordNewSettings = true;
-  }
-
-  if(new_system_max_escape != setting_max_escape_character) {
-    //Goto new max escape
-    setting_max_escape_character = new_system_max_escape;
-    EEPROM.write(LOCATION_MAX_ESCAPE_CHAR, setting_max_escape_character);
-
-    recordNewSettings = true;
-  }
-
-  if(new_system_verbose != setting_verbose) {
-    //Goto new verbose setting
-    setting_verbose = new_system_verbose;
-    EEPROM.write(LOCATION_VERBOSE, setting_verbose);
-
-    recordNewSettings = true;
-  }
-
-  if(new_system_echo != setting_echo) {
-    //Goto new echo setting
-    setting_echo = new_system_echo;
-    EEPROM.write(LOCATION_ECHO, setting_echo);
-
-    recordNewSettings = true;
-  }
-
-  if(new_system_ignore_RX != setting_ignore_RX) {
-    //Goto new ignore setting
-    setting_ignore_RX = new_system_ignore_RX;
-    EEPROM.write(LOCATION_IGNORE_RX, setting_ignore_RX);
-
-    recordNewSettings = true;
-  }
-
   //We don't want to constantly record a new config file on each power on. Only record when there is a change.
   if(recordNewSettings == true)
     record_config_file(); //If we corrected some values because the config file was corrupt, then overwrite any corruption
@@ -754,19 +472,6 @@ void read_config_file(void)
 #endif
 
   //All done! New settings are loaded. System will now operate off new config settings found in file.
-
-  //Set flags for extended mode options  
-  /* These settings are not used in light mode
-  if (setting_verbose == ON)
-    feedback_mode |= EXTENDED_INFO;
-  else
-    feedback_mode &= ((byte)~EXTENDED_INFO);
-
-  if (setting_echo == ON)
-    feedback_mode |= ECHO;
-  else
-    feedback_mode &= ((byte)~ECHO);
-    */
 }
 
 //Records the current EEPROM settings to the config file
@@ -796,19 +501,13 @@ void record_config_file(void)
 
   //Config was successfully created, now record current system settings to the config file
 
-  char settings_string[CFG_LENGTH]; //"115200,103,214,0,1,1\0" = 115200 bps, escape char of ASCII(103), 214 times, new log mode, verbose on, echo on.
+  char settings_string[CFG_LENGTH];
 
   //Before we read the EEPROM values, they've already been tested and defaulted in the read_system_settings function
   long current_system_baud = readBaud();
-  byte current_system_escape = EEPROM.read(LOCATION_ESCAPE_CHAR);
-  byte current_system_max_escape = EEPROM.read(LOCATION_MAX_ESCAPE_CHAR);
-  byte current_system_mode = EEPROM.read(LOCATION_SYSTEM_SETTING);
-  byte current_system_verbose = EEPROM.read(LOCATION_VERBOSE);
-  byte current_system_echo = EEPROM.read(LOCATION_ECHO);
-  byte current_system_ignore_RX = EEPROM.read(LOCATION_IGNORE_RX);
 
   //Convert system settings to visible ASCII characters
-  sprintf_P(settings_string, PSTR("%ld,%d,%d,%d,%d,%d,%d\0"), current_system_baud, current_system_escape, current_system_max_escape, current_system_mode, current_system_verbose, current_system_echo, current_system_ignore_RX);
+  sprintf_P(settings_string, PSTR("%ld\0"), current_system_baud);
 
   //Record current system settings to the config file
   if(myFile.write(settings_string, strlen(settings_string)) != strlen(settings_string))
@@ -817,7 +516,7 @@ void record_config_file(void)
   myFile.println(); //Add a break between lines
 
   //Add a decoder line to the file
-  #define HELP_STR "baud,escape,esc#,mode,verb,echo,ignoreRX\0"
+  #define HELP_STR "baud\0"
   char helperString[strlen(HELP_STR) + 1]; //strlen is preprocessed but returns one less because it ignores the \0
   strcpy_P(helperString, PSTR(HELP_STR));
   myFile.write(helperString); //Add this string to the file
