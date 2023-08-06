@@ -49,8 +49,8 @@ SerialPort<0, 850, 0> NewSerial;
 
 #define CFG_FILENAME "config.txt" //This is the name of the file that contains the unit settings
 
-#define MAX_CFG "115200\0" //= 115200 bps
-#define CFG_LENGTH (strlen(MAX_CFG) + 1) //Length of text found in config file. strlen ignores \0 so we have to add it back 
+#define MAX_CFG "115200" //= 115200 bps
+#define CFG_LENGTH (strlen(MAX_CFG) + 1) //Length of text found in config file
 
 //Internal EEPROM locations for the user settings
 #define LOCATION_BAUD_SETTING		0x01
@@ -96,8 +96,6 @@ void read_config_file(void);
 void record_config_file(void);
 void writeBaud(long uartRate);
 long readBaud(void);
-uint32_t strtolong(const char* str);
-void toggleLED(byte pinNumber);
 
 
 //Handle errors by printing the error type and blinking LEDs in certain way
@@ -372,11 +370,8 @@ void read_config_file(void)
 
   if (!sd.chdir()) systemError(ERROR_ROOT_INIT); // open the root directory
 
-  char configFileName[strlen(CFG_FILENAME)]; //Limited to 8.3
-  strcpy_P(configFileName, PSTR(CFG_FILENAME)); //This is the name of the config file. 'config.sys' is probably a bad idea.
-
   //Check to see if we have a config file
-  if (!configFile.open(configFileName, O_READ)) {
+  if (!configFile.open(CFG_FILENAME, O_READ)) {
     //If we don't have a config file already, then create config file and record the current system settings to the file
 #if DEBUG
     //NewSerial.println(F("No config found - creating default:"));
@@ -393,15 +388,11 @@ void read_config_file(void)
   //NewSerial.println(F("Found config file!"));
 #endif
 
-  //Read up to 20 characters from the file. There may be a better way of doing this...
-  char c;
+  //Read from the file
   int len;
   byte settings_string[CFG_LENGTH];
-  for(len = 0 ; len < CFG_LENGTH ; len++) {
-    if( (c = configFile.read()) < 0) break; //We've reached the end of the file
-    if(c == '\0') break; //Bail if we hit the end of this string
-    settings_string[len] = c;
-  }
+  len = configFile.read(settings_string, sizeof(settings_string)-1);
+  settings_string[len] = '\0';
   configFile.close();
 
 #if DEBUG
@@ -437,7 +428,7 @@ void read_config_file(void)
 
     if(setting_number == 0) //Baud rate
     {
-      new_system_baud = strtolong(new_setting);
+      new_system_baud = new_setting_int;
 
       //Basic error checking
       if(new_system_baud < BAUD_MIN || new_system_baud > BAUD_MAX) new_system_baud = 9600; //Default to 9600
@@ -482,32 +473,20 @@ void record_config_file(void)
 
   if (!sd.chdir()) systemError(ERROR_ROOT_INIT); // open the root directory
 
-  char configFileName[strlen(CFG_FILENAME)];
-  strcpy_P(configFileName, PSTR(CFG_FILENAME)); //This is the name of the config file. 'config.sys' is probably a bad idea.
-
-  //If there is currently a config file, trash it
-  if (myFile.open(configFileName, O_WRITE)) {
-    if (!myFile.remove()){
-      //NewSerial.println(F("Remove config failed"));
-      myFile.close(); //Close this file
-      return;
-    }
-  }
-
-  //myFile.close(); //Not sure if we need to close the file before we try to reopen it
-
   //Create config file
-  myFile.open(configFileName, O_CREAT | O_APPEND | O_WRITE);
+  myFile.open(CFG_FILENAME, O_CREAT | O_TRUNC | O_WRITE);
 
   //Config was successfully created, now record current system settings to the config file
 
   char settings_string[CFG_LENGTH];
 
-  //Before we read the EEPROM values, they've already been tested and defaulted in the read_system_settings function
-  long current_system_baud = readBaud();
-
   //Convert system settings to visible ASCII characters
-  sprintf_P(settings_string, PSTR("%ld\0"), current_system_baud);
+  snprintf_P(
+    settings_string,
+    sizeof(settings_string),
+    PSTR("%ld"),
+    setting_uart_speed
+  );
 
   //Record current system settings to the config file
   if(myFile.write(settings_string, strlen(settings_string)) != strlen(settings_string))
@@ -516,10 +495,7 @@ void record_config_file(void)
   myFile.println(); //Add a break between lines
 
   //Add a decoder line to the file
-  #define HELP_STR "baud\0"
-  char helperString[strlen(HELP_STR) + 1]; //strlen is preprocessed but returns one less because it ignores the \0
-  strcpy_P(helperString, PSTR(HELP_STR));
-  myFile.write(helperString); //Add this string to the file
+  myFile.write("baud");
 
   myFile.sync(); //Sync all newly written data to card
   myFile.close(); //Close this file
@@ -549,21 +525,3 @@ long readBaud(void)
 
 //End core system functions
 //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
-
-//A rudimentary way to convert a string to a long 32 bit integer
-//Used by the read command, in command shell and baud from the system menu
-uint32_t strtolong(const char* str)
-{
-  uint32_t l = 0;
-  while(*str >= '0' && *str <= '9')
-    l = l * 10 + (*str++ - '0');
-
-  return l;
-}
-
-//Given a pin, it will toggle it from high to low or vice versa
-void toggleLED(byte pinNumber)
-{
-  if (digitalRead(pinNumber)) digitalWrite(pinNumber, LOW);
-  else digitalWrite(pinNumber, HIGH);
-}
