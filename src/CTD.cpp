@@ -34,54 +34,89 @@ static struct {
 static int n_samples = 0;
 
 
-// Input from serial is accumulated here until we get a full line
-static char rx_buffer[2*sizeof(LONGEST_CTD_STR)] = {0};
-static int rx_buffer_used = 0;
-#define rx_buffer_available (sizeof(rx_buffer) - rx_buffer_used)
+// Ring buffer holding data that we receive
+static struct {
+    char buffer[sizeof(LONGEST_CTD_STR)];
+    char *head = NULL;
+    char *tail = NULL;
+    int full = 0;
+} rx_buffer;
 
-
-static void append_rx(const char *input, size_t len) {
-    /* Here be dragons. */
-
-    if (len == 0)
+static void rxb_write(char value) {
+    if (rx_buffer.full)
         return;
 
-    // If not enough space is available, shift buffer contents left
-    if (rx_buffer_available < len) {
-        size_t needed = (len <= sizeof(rx_buffer))
-            ? (len - rx_buffer_available) : sizeof(rx_buffer);
-        memmove(rx_buffer, rx_buffer + needed, sizeof(rx_buffer) - needed);
-        rx_buffer_used -= needed;
-    }
+    *(rx_buffer.head++) = value;
 
-    // Copy as much of the input buffer as we can fit
-    if (len <= rx_buffer_available) {
-        memmove(rx_buffer + rx_buffer_used, input, len);
-        rx_buffer_used += len;
-    } else {
-        memmove(rx_buffer + rx_buffer_used, input + len - rx_buffer_available,
-            rx_buffer_available);
-        rx_buffer_used = sizeof(rx_buffer);
-    }
+    // Wrap head around when it hits the bounds of the buffer
+    if (rx_buffer.head == rx_buffer.buffer + sizeof(rx_buffer.buffer))
+        rx_buffer.head = rx_buffer.buffer;
+
+    // When head catches up to tail, the buffer is full
+    if (rx_buffer.head == rx_buffer.tail)
+        rx_buffer.full = 1;
 }
 
 
-void handle_ctd_input(writefn_t writefn, char *input, size_t len) {
-    // Append the input to the receive buffer
-    append_rx(input, len);
+// Pop up to one byte from the queue. Return 1 on success, 0 on failure.
+static size_t rxb_read(char *value) {
+    // If head == tail the buffer is either full or empty. If empty, return -1.
+    if (rx_buffer.head == rx_buffer.tail && !rx_buffer.full)
+        return 0;
 
-    // Scan the receive buffer for a newline. If found, we have a full input
-    // line we can parse.
-    char *eol = strchr(rx_buffer, '\n');
-    if (eol == NULL) {
-        return;
+    *value = *(rx_buffer.tail++);
+
+    // Wrap tail around when it hits the bounds of the buffer
+    if (rx_buffer.tail == rx_buffer.buffer + sizeof(rx_buffer.buffer))
+        rx_buffer.tail = rx_buffer.buffer;
+
+    // After reading we're not full anymore
+    rx_buffer.full = 0;
+
+    return 1;
+}
+
+
+// Read all the bytes into a contiguous output buffer. The output buffer must
+// be the correct size. Return the number of bytes read.
+static size_t rb_read_all(char *output) {
+    // Edge case: buffer is empty
+    if (rx_buffer.head == rx_buffer.tail && !rx_buffer.full)
+        return 0;
+
+    size_t count = 0;
+
+    // If head is after tail, the contents are already contiguous
+    if (rx_buffer.head > rx_buffer.tail) {
+        count = rx_buffer.head - rx_buffer.tail;
+        memcpy(output, rx_buffer.tail, count);
+
+    // Otherwise, we have two spans to copy: from tail to the end of the buffer,
+    // then from the start of the buffer to head.
+    } else {
+        count = sizeof(rx_buffer.buffer) - (rx_buffer.tail - rx_buffer.buffer);
+        memcpy(output, rx_buffer.tail, count);
+        memcpy(output + count, rx_buffer.buffer,
+            rx_buffer.head - rx_buffer.buffer);
+        count += rx_buffer.head - rx_buffer.buffer;
     }
-    *eol = '\0';
 
-    // Now our buffer contains a null-terminated line of CTD data.
-    //
-    // Parse the fields from it.
-    char *buf_ptr = rx_buffer;
+    // Drain the buffer
+    rx_buffer.tail = rx_buffer.head;
+    rx_buffer.full = 0;
+
+    return count;
+}
+
+
+static void handle_ctd_line(writefn_t writefn) {
+    // Copy the line into contiguous memory
+    char line[sizeof(LONGEST_CTD_STR)+1];
+    size_t len = rb_read_all(line);
+    line[len] = '\0';
+
+    // Parse the fields from it
+    char *buf_ptr = line;
     samples[n_samples].temperature = atof(strsep(&buf_ptr, ", "));
     samples[n_samples].conductivity = atof(strsep(&buf_ptr, ", "));
     samples[n_samples].pressure = atof(strsep(&buf_ptr, ", "));
@@ -93,6 +128,7 @@ void handle_ctd_input(writefn_t writefn, char *input, size_t len) {
 #endif
     n_samples ++;
 
+    // If we filled our parsed samples buffer, emit the average
     if (n_samples == MAX_SAMPLES) {
         // Sum all samples into the first slot
         for (int i = 1; i < MAX_SAMPLES; i ++) {
@@ -119,10 +155,9 @@ void handle_ctd_input(writefn_t writefn, char *input, size_t len) {
 #endif
 
         // Output the average
-        char buffer[strlen(LONGEST_CTD_STR) + 1];
         snprintf(
-            buffer,
-            strlen(LONGEST_CTD_STR) + 1,
+            line,
+            sizeof(line),
             "%8.4f, %8.5f, %8.3f"
 #if OUTPUT_SAL
             ", %8.4f"
@@ -141,14 +176,27 @@ void handle_ctd_input(writefn_t writefn, char *input, size_t len) {
             , samples[0].sound_velocity
 #endif
         );
-        writefn(buffer);
+        writefn(line);
 
         // Reset the insertion cursor
         n_samples = 0;
     }
+}
 
-    // Lastly, shift the receive left to consume the line. Now the buffer begins
-    // with the byte to the right of the newline.
-    rx_buffer_used -= (eol + 1 - rx_buffer);
-    memmove(rx_buffer, eol + 1, rx_buffer_used);
+
+void handle_ctd_input(writefn_t writefn, char *input, size_t len) {
+    // Initialize the ring buffer head and tail pointers the first time
+    if (!rx_buffer.head) {
+        rx_buffer.head = rx_buffer.buffer;
+        rx_buffer.tail = rx_buffer.buffer;
+    }
+
+    // Copy data into the receive buffer. When we hit a newline, process the
+    // contents of the buffer.
+    for (size_t i = 0; i < len; i ++) {
+        if (input[i] == '\n')
+            handle_ctd_line(writefn);
+        else
+            rxb_write(input[i]);
+    }
 }
