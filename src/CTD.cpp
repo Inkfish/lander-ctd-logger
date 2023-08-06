@@ -117,14 +117,19 @@ static void handle_ctd_line(writefn_t writefn) {
 
     // Parse the fields from it
     char *buf_ptr = line;
-    samples[n_samples].temperature = atof(strsep(&buf_ptr, ", "));
-    samples[n_samples].conductivity = atof(strsep(&buf_ptr, ", "));
-    samples[n_samples].pressure = atof(strsep(&buf_ptr, ", "));
+    buf_ptr += strspn(buf_ptr, " ");
+    samples[n_samples].temperature = atof(strsep(&buf_ptr, ","));
+    buf_ptr += strspn(buf_ptr, " ");
+    samples[n_samples].conductivity = atof(strsep(&buf_ptr, ","));
+    buf_ptr += strspn(buf_ptr, " ");
+    samples[n_samples].pressure = atof(strsep(&buf_ptr, ","));
 #if OUTPUT_SAL
-    samples[n_samples].salinity = atof(strsep(&buf_ptr, ", "));
+    buf_ptr += strspn(buf_ptr, " ");
+    samples[n_samples].salinity = atof(strsep(&buf_ptr, ","));
 #endif
 #if OUTPUT_SV
-    samples[n_samples].sound_velocity = atof(strsep(&buf_ptr, ", "));
+    buf_ptr += strspn(buf_ptr, " ");
+    samples[n_samples].sound_velocity = atof(strsep(&buf_ptr, ","));
 #endif
     n_samples ++;
 
