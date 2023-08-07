@@ -29,7 +29,7 @@
 #include <EEPROM.h>
 #include <FreeStack.h> //Allows us to print the available stack/RAM size
 
-SerialPort<0, 850, 0> NewSerial;
+SerialPort<0, 512, 0> NewSerial;
 //This is a very important buffer declaration. This sets the <port #, rx size, tx size>. We set
 //the TX buffer to zero because we will be spending most of our time needing to buffer the incoming (RX) characters.
 
