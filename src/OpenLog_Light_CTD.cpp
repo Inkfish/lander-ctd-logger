@@ -61,6 +61,7 @@ SerialPort<0, 850, 0> NewSerial;
 #define LOCATION_BAUD_SETTING_LOW	0x0B
 
 #define BAUD_MIN  300
+#define BAUD_DEFAULT 9600
 #define BAUD_MAX  1000000
 
 //STAT1 is a general LED and indicates serial traffic
@@ -84,7 +85,7 @@ const byte statled2 = 13; //This is the SPI LED, indicating SD traffic
 
 SdFat sd;
 
-long setting_uart_speed; //This is the baud rate that the system runs at, default is 9600. Can be 300 to 1,000,000
+long setting_uart_speed; //This is the baud rate that the system runs at
 
 //Forward declarations
 void systemError(byte error_type);
@@ -145,16 +146,6 @@ void setup(void)
 
   read_system_settings(); //Load all system settings from EEPROM
 
-  //Setup UART
-  NewSerial.begin(setting_uart_speed);
-  if (setting_uart_speed < 500)      // check for slow baud rates
-  {
-    //There is an error in the Serial library for lower than 500bps. 
-    //This fixes it. See issue 163: https://github.com/sparkfun/OpenLog/issues/163
-    // redo USART baud rate configuration
-    UBRR0 = (F_CPU / (16UL * setting_uart_speed)) - 1;
-    UCSR0A &= ~_BV(U2X0);
-  }
   //NewSerial.print(F("1"));
 
   //Setup SD & FAT
@@ -165,6 +156,17 @@ void setup(void)
 
   //Search for a config file and load any settings found. This will over-ride previous EEPROM settings if found.
   read_config_file();
+
+  //Setup UART
+  NewSerial.begin(setting_uart_speed);
+  if (setting_uart_speed < 500)      // check for slow baud rates
+  {
+    //There is an error in the Serial library for lower than 500bps.
+    //This fixes it. See issue 163: https://github.com/sparkfun/OpenLog/issues/163
+    // redo USART baud rate configuration
+    UBRR0 = (F_CPU / (16UL * setting_uart_speed)) - 1;
+    UCSR0A &= ~_BV(U2X0);
+  }
 }
 
 void loop(void)
@@ -355,11 +357,10 @@ void blink_error(byte ERROR_TYPE) {
 void read_system_settings(void)
 {
   //Read what the current UART speed is from EEPROM memory
-  //Default is 9600
   setting_uart_speed = readBaud(); //Combine the three bytes
   if(setting_uart_speed < BAUD_MIN || setting_uart_speed > BAUD_MAX) 
   {
-    setting_uart_speed = 9600; //Reset UART to 9600 if there is no speed stored
+    setting_uart_speed = BAUD_DEFAULT;
     writeBaud(setting_uart_speed); //Record to EEPROM
   }
 }
@@ -406,7 +407,7 @@ void read_config_file(void)
 #endif
 
   //Default the system settings in case things go horribly wrong
-  long new_system_baud = 9600;
+  long new_system_baud = BAUD_DEFAULT;
 
   //Parse the settings out
   byte i = 0, j = 0, setting_number = 0;
@@ -431,7 +432,7 @@ void read_config_file(void)
       new_system_baud = new_setting_int;
 
       //Basic error checking
-      if(new_system_baud < BAUD_MIN || new_system_baud > BAUD_MAX) new_system_baud = 9600; //Default to 9600
+      if(new_system_baud < BAUD_MIN || new_system_baud > BAUD_MAX) new_system_baud = BAUD_DEFAULT;
     }
     else
       //We're done! Stop looking for settings
@@ -449,7 +450,6 @@ void read_config_file(void)
     //And re-init the UART
     writeBaud(new_system_baud); //Write this baudrate to EEPROM
     setting_uart_speed = new_system_baud;
-    NewSerial.begin(setting_uart_speed); //Move system to new uart speed
 
     recordNewSettings = true;
   }
