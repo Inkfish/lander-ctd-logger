@@ -8,11 +8,6 @@
 #define LONGEST_CTD_STR "ttt.tttt, cc.ccccc, pppp.ppp, sss.ssss, vvvv.vvv\n"
 
 
-// Modify depending on the configuration settings on the CTD
-#define OUTPUT_SAL 1
-#define OUTPUT_SV  0
-
-
 // How many samples to accumulate before outputting an averaged one. The SBE 49
 // takes samples 16 Hz, so this causes output at 1 Hz.
 #define MAX_SAMPLES 16
@@ -22,12 +17,8 @@ static struct {
     float temperature;
     float conductivity;
     float pressure;
-#if OUTPUT_SAL
     float salinity;
-#endif
-#if OUTPUT_SV
     float sound_velocity;
-#endif
 } samples[MAX_SAMPLES];
 
 
@@ -35,7 +26,7 @@ static int n_samples = 0;
 
 
 // Ring buffer holding data that we receive
-static struct {
+struct {
     char buffer[sizeof(LONGEST_CTD_STR)];
     char *head = NULL;
     char *tail = NULL;
@@ -115,7 +106,7 @@ static void handle_ctd_line(writefn_t writefn) {
     size_t len = rb_read_all(line);
     line[len] = '\0';
 
-    // Parse the fields from it
+    // Parse temperature, conductivity, and pressure
     char *buf_ptr = line;
     buf_ptr += strspn(buf_ptr, " ");
     samples[n_samples].temperature = atof(strsep(&buf_ptr, ","));
@@ -123,14 +114,28 @@ static void handle_ctd_line(writefn_t writefn) {
     samples[n_samples].conductivity = atof(strsep(&buf_ptr, ","));
     buf_ptr += strspn(buf_ptr, " ");
     samples[n_samples].pressure = atof(strsep(&buf_ptr, ","));
-#if OUTPUT_SAL
+
+    // If there is a fourth field, count the digits after the decimal point to
+    // determine if it's salinity (sss.ssss) or sound velocity (vvvv.vvv).
+    samples[n_samples].salinity = -9999;
+    samples[n_samples].sound_velocity = -9999;
+
     buf_ptr += strspn(buf_ptr, " ");
-    samples[n_samples].salinity = atof(strsep(&buf_ptr, ","));
-#endif
-#if OUTPUT_SV
+    char *token = strsep(&buf_ptr, ",");
+    if (token) {
+        char *decimal = strchr(token, '.');
+        if (decimal && strspn(decimal + 1, "0123456789") == 4)
+            samples[n_samples].salinity = atof(token);
+        else
+            samples[n_samples].sound_velocity = atof(token);
+    }
+
+    // If there is a fifth field, it must be sound velocity
     buf_ptr += strspn(buf_ptr, " ");
-    samples[n_samples].sound_velocity = atof(strsep(&buf_ptr, ","));
-#endif
+    token = strsep(&buf_ptr, ",");
+    if (token)
+        samples[n_samples].sound_velocity = atof(token);
+
     n_samples ++;
 
     // If we filled our parsed samples buffer, emit the average
@@ -140,24 +145,16 @@ static void handle_ctd_line(writefn_t writefn) {
             samples[0].temperature += samples[i].temperature;
             samples[0].conductivity += samples[i].conductivity;
             samples[0].pressure += samples[i].pressure;
-#if OUTPUT_SAL
             samples[0].salinity += samples[i].salinity;
-#endif
-#if OUTPUT_SV
             samples[0].sound_velocity += samples[i].sound_velocity;
-#endif
         }
 
         // Compute the average of the samples
         samples[0].temperature /= MAX_SAMPLES;
         samples[0].conductivity /= MAX_SAMPLES;
         samples[0].pressure /= MAX_SAMPLES;
-#if OUTPUT_SAL
         samples[0].salinity /= MAX_SAMPLES;
-#endif
-#if OUTPUT_SV
         samples[0].sound_velocity /= MAX_SAMPLES;
-#endif
 
         // Output the average
         buf_ptr = line;
@@ -171,20 +168,17 @@ static void handle_ctd_line(writefn_t writefn) {
         *buf_ptr++ = ' ';
         dtostrf(samples[0].pressure, 8, 3, buf_ptr);
         buf_ptr += 8;
-
-#if OUTPUT_SAL
         *buf_ptr++ = ',';
         *buf_ptr++ = ' ';
         dtostrf(samples[0].salinity, 8, 4, buf_ptr);
         buf_ptr += 8;
-#endif
 
-#if OUTPUT_SV
+        // Technically the Lander Control Board V1 firmware does not parse the
+        // fifth value, but there shouldn't be any harm in emitting it.
         *buf_ptr++ = ',';
         *buf_ptr++ = ' ';
         dtostrf(samples[0].sound_velocity, 8, 3, buf_ptr);
         buf_ptr += 8;
-#endif
 
         *buf_ptr++ = '\n';
         *buf_ptr++ = '\0';
