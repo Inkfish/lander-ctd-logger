@@ -14,7 +14,7 @@ The only components needed are the [SparkFun OpenLog][] and a [MAX3232 transceiv
 
 <img src="./docs/CTD%20logger.svg" width="100%" />
 
-(Note that some components, such as the CTD, are represented as SIP ICs for purposes of illustration.)
+(Note that some components are represented as SIP ICs for purposes of illustration. The leftmost pin of the MAX3232 transceiver above is `T1OUT`.)
 
 In summary, the circuit interposes the communication between the CTD and Lander Control Board:
 
@@ -35,14 +35,78 @@ In summary, the circuit interposes the communication between the CTD and Lander 
                        +-------------------------------------+
 
 
+**Note:** Consider the need to attach the programmer to the OpenLog. See Programming section below.
+
+
   [MAX3232]: https://www.sparkfun.com/products/11189
 
 
 ## Compiling
 
-This project uses [PlatformIO][]. You can build the firmware and program the OpenLog using the PlatformIO Core CLI tool:
-
-    git submodule update --init
-    pio run
+This project uses [PlatformIO][]. You can build the firmware and program the OpenLog using the PlatformIO Core CLI tool.
 
   [PlatformIO]: https://platformio.org/
+
+First, clone the repository with submodules:
+
+    git submodule update --init
+
+Patch `SerialPort.h` to disable `BUFFERED_TX` and `ENABLE_RX_ERROR_CHECKING`:
+
+    sed -i.bak \
+      -e 's/\(#define BUFFERED_TX\) 1/\1 0/' \
+      -e 's/\(#define ENABLE_RX_ERROR_CHECKING\) 1/\1 0/' \
+      Libraries/SerialPort/SerialPort/SerialPort.h
+
+Compile the project using PlatformIO to check for errors:
+
+    pio run
+
+
+## Programming
+
+The OpenLog can be programmed using a 4-wire TTL UART to USB adapter. Review the [OpenLog Hookup Guide][hookup] for details on wiring. Importantly, the OpenLog `DTR` pin (inexplicably labeled `GRN`) must be connected to the programmer's `DTR` or `RTS` output.
+
+  [hookup]: https://learn.sparkfun.com/tutorials/openlog-hookup-guide#hardware-hookup
+
+    pio run -t upload
+
+
+### Programming with a Bus Pirate
+
+The [Bus Pirate][] can be used as a programmer. Attach the pins as follows:
+
+  | Bus Pirate | OpenLog |
+  | ---------- | ------- |
+  | `MOSI`     | `RX`    |
+  | `MISO`     | `TX`    |
+  | `CLK`      | `GRN`   | 
+  | `GND`      | `GND`   |
+
+Place the Bus Pirate into the transparent UART bridge mode with flow control signaling:
+
+    # Enter UART mode, use baud 115200 for programming
+    HiZ>m
+    2. UART
+    (1)>2
+    ...
+
+    # Enable power output on the pins
+    UART>W
+    POWER SUPPLIES ON
+    Clutch engaged!!!
+
+    # Start the transparent bridge
+    UART>(3)
+    UART bridge
+    Reset to exit
+    Are you sure? y
+
+Disconnect the terminal session and proceed with programming the board.
+
+  [Bus Pirate]: http://dangerousprototypes.com/docs/Bus_Pirate
+
+
+## Configuration
+
+By default, the OpenLog expects to receive and transmit data at 9600 baud, the same rate as the Lander Control Board. If this needs to be changed, a different baud rate can be written to the file `config.txt` at the root of the microSD card.
