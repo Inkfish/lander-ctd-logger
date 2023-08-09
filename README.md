@@ -122,3 +122,12 @@ Disconnect the terminal session and proceed with programming the board.
 ## Configuration
 
 By default, the OpenLog expects to receive and transmit data at 9600 baud, the same rate as the Lander Control Board. If this needs to be changed, a different baud rate can be written to the file `config.txt` at the root of the microSD card.
+
+
+## Testing
+
+A quick and dirty test script can be used to send fake samples to the logger from a PC. The script counts the number of downsampled replies that match expected values.
+
+    python3 test/simctd.py --sal --sv /dev/tty.usbserial
+
+The `--sal` and `--sv` flags simulate the `OUTPUTSAL` (salinity) and `OUTPUTSV` (sound velocity) options on the SBE 49.
