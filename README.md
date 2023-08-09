@@ -123,6 +123,8 @@ Disconnect the terminal session and proceed with programming the board.
 
 By default, the OpenLog expects to receive and transmit data at 9600 baud, the same rate as the Lander Control Board. If this needs to be changed, a different baud rate can be written to the file `config.txt` at the root of the microSD card.
 
+The SBE 49 must be configured for `OUTPUTFORMAT=3`, engineering units in decimal. 
+
 
 ## Testing
 
