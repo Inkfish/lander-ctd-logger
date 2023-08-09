@@ -72,6 +72,18 @@ The OpenLog can be programmed using a 4-wire TTL UART to USB adapter. Review the
     pio run -t upload
 
 
+### Programming with a RS-232 cable
+
+A USB to RS-232 cable (DB-9 connector) can also be used for programming. The `RX`/`TX` pinout on the DB-9 connector must be confirmed due to the various permutations.
+
+  | DB-9              | MAX3232           | OpenLog |
+  | ----------------- | ----------------- | ------- |
+  | `TX` (pin 2 or 3) | `R1IN` → `R1OUT`  | `RX`    |
+  | `RX` (pin 2 or 3) | `T1OUT` ← `T1IN`  | `TX`    |
+  | `DTR` (pin 4)     | `R2IN`  → `R2OUT` | `GRN`   |
+  | `GND` (pin 5)     | `GND`             | `GND`   |
+
+
 ### Programming with a Bus Pirate
 
 The [Bus Pirate][] can be used as a programmer. Attach the pins as follows:
