@@ -10,7 +10,7 @@ The SBE 49 is capable of sampling at 16 Hz, but the lander controller functions 
 
 ## Wiring Diagram
 
-The only components needed are the [SparkFun OpenLog][] and a [MAX3232 transceiver breakout][MAX3232]. 5V input is supplied by the Lander Control Board's buck converter.
+The only components needed are the [SparkFun OpenLog][] and a [MAX3232 transceiver breakout][MAX3232].
 
 <img src="./docs/CTD%20logger.svg" width="100%" />
 
