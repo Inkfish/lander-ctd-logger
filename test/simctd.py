@@ -71,7 +71,7 @@ while True:
         (5*expected) if args.sv else -9999
     ]
 
-    if len(expected) == 5 and \
+    if len(parsed) == len(expected) and \
         all(abs(p-e) < 0.01 for p,e in zip(parsed, expected)):
         successes += 1
     else:
