@@ -8,7 +8,14 @@ This repository holds firmware for the [SparkFun OpenLog][] specifically tailore
 The SBE 49 is capable of sampling at 16 Hz, but the lander controller functions best when it receives CTD data at 1 Hz. This firmware logs at the higher rate, then downsamples the data and passes it to the controller at the lower rate.
 
 
-## Wiring Diagram
+## Hardware
+
+### Custom PCB
+
+**(NEW):** The `hardware` directory contains KiCad designs for a printed circuit board that accepts a wider input voltage range and is designed to be significantly more resilient to power surges.
+
+
+### Breadboard
 
 The only components needed are the [SparkFun OpenLog][] and a [MAX3232 transceiver breakout][MAX3232].
 
